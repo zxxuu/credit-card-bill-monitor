@@ -244,18 +244,24 @@ def main():
         # 同银行多人时，通过邮件内容匹配持卡人（从配置文件读取）
         person_names = CARDHOLDERS.get("person_map", {})
         names = person_names.get(person, [])
+        # 收集所有已知姓名（用于排除其他人）
+        all_names = set()
+        for pn_list in person_names.values():
+            all_names.update(pn_list)
+        other_names = all_names - set(names)
         lat = None
         for e in matched:
             if e["id"] in used_emails:
                 continue
-            if len(matched) == 1:
-                lat = e
-                break
-            # 先检查邮件正文
             text = decode_email(e["id"])
-            if text and any(n in text for n in names):
-                lat = e
-                break
+            if text:
+                # 有当前人的姓名 → 匹配
+                if any(n in text for n in names):
+                    lat = e
+                    break
+                # 有其他人的姓名 → 跳过（不是这封）
+                if any(n in text for n in other_names):
+                    continue
             # 邮件正文没有姓名，检查PDF附件（如中行）
             if e.get("has_attachment"):
                 pi = download_pdf_attachment(e["id"])
@@ -263,8 +269,11 @@ def main():
                     if any(n in pi["cardholder"] for n in names):
                         lat = e
                         break
-        if not lat and len(matched) == 1:
-            lat = matched[0]
+                    if any(n in pi["cardholder"] for n in other_names):
+                        continue
+            # 邮件中没有任何人姓名信息，无法区分 → 暂存备用
+            if not lat:
+                lat = e
         if not lat:
             print(f"  \u26a0\ufe0f {person:4}|{bank:10}|\u672a\u627e\u5230\u5339\u914d\u90ae\u4ef6")
             cs = {"person":person,"bank":bank,"bill_day":bd,"pay_date":pd,

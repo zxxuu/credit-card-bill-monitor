@@ -6,11 +6,17 @@ from datetime import datetime, timedelta
 HIMALAYA_CMD = os.path.expanduser("~/.local/bin/himalaya")
 EXCEL_PATH = os.path.expanduser("~/credit-card-bill-monitor/credit_cards.xlsx")
 STATE_FILE = os.path.expanduser("~/credit-card-bill-monitor/state.json")
+CARDHOLDERS_FILE = os.path.expanduser("~/credit-card-bill-monitor/cardholders.json")
 
-PERSON_EMAILS = {
-    "\u6211\u7684": ["zxxuu@qq.com"],
-    "\u838e\u838e": ["630669623@qq.com", "1134340309@qq.com"],
-}
+def load_cardholders():
+    """加载持卡人配置"""
+    if os.path.exists(CARDHOLDERS_FILE):
+        with open(CARDHOLDERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"cardholders": {}, "person_map": {}}
+
+CARDHOLDERS = load_cardholders()
+
 BANK_KEYWORDS = {
     "\u5149\u5927":["\u5149\u5927"],"\u5174\u4e1a":["\u5174\u4e1a"],"\u5e73\u5b89":["\u5e73\u5b89"],
     "\u5de5\u5546":["\u5de5\u5546"],"\u90ae\u50a8":["\u90ae\u50a8"],"\u90ae\u50a8\u65e0\u754c\u767d":["\u90ae\u50a8"],
@@ -111,8 +117,12 @@ def decode_gbk(email_id):
 
 def extract_bill(text, bank):
     info = {"bank": bank, "amount_confirmed": False}
-    if "\u8303\u6625\u838e" in text: info["cardholder"] = "\u8303\u6625\u838e"
-    elif "\u5b59\u781a\u5149" in text: info["cardholder"] = "\u5b59\u781a\u5149"
+    # 从配置文件读取持卡人姓名
+    for person_id, cfg in CARDHOLDERS.get("cardholders", {}).items():
+        for name in cfg.get("names", []):
+            if name in text:
+                info["cardholder"] = name
+                break
     # \u8fd8\u6b3e\u65e5
     for p in [r"\u5230\u671f\u8fd8\u6b3e\u65e5.*?(\d{4}\u5e74\d{1,2}\u6708\d{1,2}\u65e5)",
               r"\u5230\u671f\u8fd8\u6b3e\u65e5[\s\S]*?(\d{4}[-/]\d{1,2}[-/]\d{1,2})",
@@ -193,8 +203,12 @@ def parse_boc_pdf(pdf_path):
         if m: info["amount"] = m.group(1)
         m = re.search(r"\u5230\u671f\u8fd8\u6b3e\u65e5[\s\S]*?(\d{4}-\d{2}-\d{2})", txt)
         if m: info["due_date"] = m.group(1)
-        if "\u8303\u6625\u838e" in txt: info["cardholder"] = "\u8303\u6625\u838e"
-        elif "\u5b59\u781a\u5149" in txt: info["cardholder"] = "\u5b59\u781a\u5149"
+        # 从配置文件读取持卡人姓名
+        for person_id, cfg in CARDHOLDERS.get("cardholders", {}).items():
+            for name in cfg.get("names", []):
+                if name in txt:
+                    info["cardholder"] = name
+                    break
         return info if info else None
     except Exception as e:
         print(f"    PDF\u89e3\u6790\u5931\u8d25: {e}")
@@ -227,9 +241,8 @@ def main():
             else:
                 state["cards"].append(cs)
             continue
-        # 同银行多人时，通过邮件内容匹配持卡人
-        # TODO: 替换为你的真实姓名映射
-        person_names = {"user1": ["张三", "张*三", "张先生"], "user2": ["李四", "李*四", "李小姐"]}
+        # 同银行多人时，通过邮件内容匹配持卡人（从配置文件读取）
+        person_names = CARDHOLDERS.get("person_map", {})
         names = person_names.get(person, [])
         lat = None
         for e in matched:

@@ -17,6 +17,7 @@ data/*.json
 # 真实账单数据（隐私）
 credit_cards.xlsx
 details/
+cardholders.json
 
 # Python
 __pycache__/

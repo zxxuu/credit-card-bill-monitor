@@ -1,0 +1,48 @@
+# 环境配置
+.env
+*.env.local
+
+# API Keys
+api_keys.json
+
+# 状态文件
+state.json
+.last_msg_ids.json
+.poll.pid
+.watchdog.pid
+
+# 数据目录（保留结构）
+data/*.json
+
+# 真实账单数据（隐私）
+credit_cards.xlsx
+details/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+venv/
+.venv/
+
+# 临时文件
+*.tmp
+*.log
+tg.log
+
+# 归档
+archive/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

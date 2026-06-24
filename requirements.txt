@@ -1,0 +1,12 @@
+# 核心依赖（Python 标准库，无需安装）
+# json, os, sys, time, signal, subprocess, tempfile, re, datetime, threading
+
+# 邮件解析（himalaya CLI，需要单独安装）
+# 安装方式：curl -sSL https://pimalaya.org/himalaya/install.sh | sh
+# himalaya
+
+# PDF 解析（可选，用于解析银行 PDF 附件）
+PyMuPDF>=1.23.0
+
+# Excel 解析（可选，用于读取信用卡蓝图）
+openpyxl>=3.1.0

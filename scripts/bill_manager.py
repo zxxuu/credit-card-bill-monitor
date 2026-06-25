@@ -8,7 +8,7 @@ from datetime import datetime
 # 添加项目路径
 sys.path.insert(0, os.path.expanduser("~/credit-card-bill-monitor"))
 from scripts.db import init_db, get_db
-from scripts.db.email_store import get_latest_email, get_email_count
+from scripts.db.email_store import get_latest_email, get_email_count, get_email_by_bill_day
 from scripts.rules.due_date import calc_billing_date, calc_due_date, get_billing_cycle, days_until_due
 
 CONFIG_DIR = os.path.expanduser("~/credit-card-bill-monitor/config")
@@ -69,11 +69,12 @@ def main(verbose=False):
         billing_cycle = get_billing_cycle(bill_day, today)
         days_left = days_until_due(due_date, today)
         
-        # 从邮件库查找匹配的邮件
-        email = get_latest_email(bank, person)
+        # 从邮件库查找匹配的邮件（按 bank + person + bill_day 匹配）
+        email = get_email_by_bill_day(bank, person, bill_day, billing_cycle)
         
         # 准备状态数据
         cs = {
+            "card_id": card_id,
             "person": person,
             "bank": bank,
             "card_name": card_name,
@@ -109,11 +110,9 @@ def main(verbose=False):
             if verbose:
                 print(f"  ⚠️ {person:4}|{bank:10}|{'❓待解析':>12}|{due_date.strftime('%Y-%m-%d')}|")
         
-        # 更新状态
+        # 更新状态（用 card_id 作唯一键，避免重复）
         existing = next((c for c in state["cards"] 
-                        if c.get("person") == person 
-                        and c.get("bank") == bank 
-                        and c.get("bill_day") == bill_day), None)
+                        if c.get("card_id") == card_id), None)
         
         if existing:
             # 保留已处理状态

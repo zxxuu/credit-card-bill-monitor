@@ -63,12 +63,13 @@ def add_msg_id(mid):
     ids = load_msg_ids()
     if mid not in ids: ids.append(mid); save_msg_ids(ids)
 
-def mark_processed(person, bank):
+def mark_processed(person, bank, bill_day=None):
     state = load_state()
     for c in state["cards"]:
         if c.get("person") == person and c.get("bank") == bank:
-            c["status"] = "已处理"; c["processed_at"] = datetime.now().isoformat()
-            save_state(state); return True
+            if bill_day is None or c.get("bill_day") == bill_day:
+                c["status"] = "已处理"; c["processed_at"] = datetime.now().isoformat()
+                save_state(state); return True
     return False
 
 def mark_all():
@@ -120,7 +121,8 @@ def build_text():
             urg = "❌已过期" if dl < 0 else f"⚠️{dl}天" if dl <= 3 else f"✅{dl}天"
         except: urg = "❓"
         amt_s = f"￥{amt}" if ok and float(amt) > 0 else "￥0" if ok else "❓"
-        lines.append(f"{i+1}. {p}-{b} {amt_s} {urg}")
+        card_display = c.get('card_name', '') or b
+        lines.append(f"{i+1}. {p}-{card_display} {amt_s} {urg}")
         if ok:
             try: total += float(amt)
             except: pass
@@ -135,7 +137,10 @@ def build_kb(expanded=False, listening=False):
             row = []
             for c in unprocessed:
                 p, b = c.get("person",""), c.get("bank","")
-                row.append({"text": f"✅{p}-{b}", "callback_data": f"pay|{p}|{b}"})
+                days = c.get('days_until_due', 0)
+                days_str = f"{days}天" if days >= 0 else "已过期"
+                btn_text = f"✅{p}-{c.get('card_name','') or b} {days_str}"
+                row.append({"text": btn_text, "callback_data": f"pay|{p}|{b}|{c.get('bill_day','')}"})
                 if len(row) == 2: kb.append(row); row = []
             if row: kb.append(row)
             kb.append([{"text": "📋折叠", "callback_data": "collapse"}])
@@ -271,8 +276,10 @@ def poll(msg_id):
                 elif data == "pay_all":
                     n = mark_all(); tg_api("answerCallbackQuery", {"callback_query_id": cid, "text": f"✅已标记{n}张"}); update_msg(msg_id, expanded, listening=True)
                 elif data.startswith("pay|"):
-                    _, p, b = data.split("|", 2)
-                    if mark_processed(p, b): tg_api("answerCallbackQuery", {"callback_query_id": cid, "text": f"✅{p}-{b}已标记"}); update_msg(msg_id, expanded, listening=True)
+                    parts = data.split("|")
+                    p, b = parts[1], parts[2]
+                    bd = int(parts[3]) if len(parts) > 3 else None
+                    if mark_processed(p, b, bd): tg_api("answerCallbackQuery", {"callback_query_id": cid, "text": f"✅{p}-{b}已标记"}); update_msg(msg_id, expanded, listening=True)
                     else: tg_api("answerCallbackQuery", {"callback_query_id": cid, "text": "❌未找到"})
                 elif data == "refresh":
                     tg_api("answerCallbackQuery", {"callback_query_id": cid, "text": "🔄刷新中，请稍候..."})

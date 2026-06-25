@@ -11,7 +11,10 @@
     ]
   },
   "中行": {
-    "keywords": ["中行", "中国银行"],
+    "keywords": [
+      "中行",
+      "中国银行"
+    ],
     "due_rule": "+20",
     "source": "attachment",
     "amount_patterns": [
@@ -19,64 +22,111 @@
     ]
   },
   "光大": {
-    "keywords": ["光大"],
+    "keywords": [
+      "光大"
+    ],
     "due_rule": "+19",
     "source": "body",
     "amount_patterns": [
-      "RMB Statement Balance[\\s\\S]*?[¥￥]([\\d,]+\\.?\\d*)\\s+[¥￥]([\\d,]+\\.?\\d*)\\s+[¥￥]([\\d,]+\\.?\\d*)"
+      "RMB Statement Balance\\s+[￥¥]\\s*([\\d,]+\\.?\\d*)",
+      "RMB Statement Balance\\s+RMB Minimum Payment Due\\s+[\\d/]+\\s+[\\d/]+\\s+[￥¥]([\\d,]+\\.?\\d*)\\s+[￥¥]([\\d,]+\\.?\\d*)",
+      "人民币本期应还款额[\\s\\S]*?RMB Statement Balance\\s+[￥¥]\\s*([\\d,]+\\.?\\d*)"
     ],
     "amount_group": 2
   },
   "交通": {
-    "keywords": ["交通"],
-    "source": "body"
+    "keywords": [
+      "交通"
+    ],
+    "source": "body",
+    "amount_patterns": [
+      "本期应还款\\s*[￥¥]\\s*([\\d,]+\\.?\\d*)",
+      "Statement Balance\\s*[￥¥]\\s*([\\d,]+\\.?\\d*)"
+    ]
   },
   "工商": {
-    "keywords": ["工商"],
+    "keywords": [
+      "工商"
+    ],
     "source": "body"
   },
   "浦发": {
-    "keywords": ["浦发"],
+    "keywords": [
+      "浦发"
+    ],
     "source": "body"
   },
   "招商": {
-    "keywords": ["招商"],
+    "keywords": [
+      "招商"
+    ],
     "source": "body"
   },
   "中信": {
-    "keywords": ["中信"],
-    "source": "body"
+    "keywords": [
+      "中信"
+    ],
+    "source": "body",
+    "amount_patterns": [
+      "本期应还款总额\\s+CNY\\s+([\\d,]+\\.?\\d*)",
+      "Total Payment\\s+CNY\\s+([\\d,]+\\.?\\d*)"
+    ]
   },
   "农行": {
-    "keywords": ["农行", "农业银行"],
-    "source": "body"
+    "keywords": [
+      "农行",
+      "农业银行"
+    ],
+    "source": "body",
+    "amount_patterns": [
+      "New Balance\\s+人民币\\(CNY\\)\\s+(-?[\\d,]+\\.?\\d*)",
+      "本期应还款额[\\s\\S]*?New Balance\\s+人民币\\(CNY\\)\\s+(-?[\\d,]+\\.?\\d*)"
+    ]
   },
   "民生": {
-    "keywords": ["民生"],
+    "keywords": [
+      "民生"
+    ],
     "source": "body"
   },
   "华夏": {
-    "keywords": ["华夏"],
+    "keywords": [
+      "华夏"
+    ],
     "source": "body"
   },
   "邮储": {
-    "keywords": ["邮储"],
+    "keywords": [
+      "邮储"
+    ],
     "source": "body"
   },
   "平安": {
-    "keywords": ["平安"],
+    "keywords": [
+      "平安"
+    ],
     "source": "body"
   },
   "兴业": {
-    "keywords": ["兴业"],
+    "keywords": [
+      "兴业"
+    ],
     "source": "body"
   },
   "广发": {
-    "keywords": ["广发"],
+    "keywords": [
+      "广发"
+    ],
     "source": "body"
   },
   "张家口": {
-    "keywords": ["张家口"],
-    "source": "body"
+    "keywords": [
+      "张家口"
+    ],
+    "source": "body",
+    "amount_patterns": [
+      "Total Statement Balance\\s+RMB\\s+([\\d,]+\\.?\\d*)",
+      "本期应还款总额[\\s\\S]*?Total Statement Balance\\s+RMB\\s+([\\d,]+\\.?\\d*)"
+    ]
   }
 }

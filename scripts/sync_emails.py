@@ -146,7 +146,7 @@ def extract_bill_info(text, bank_name, bank_rules):
     # 提取最低还款
     for p in [
         r"本期最低还款额.*?[¥￥]\s*([\d,]+\.?\d*)",
-        r"最低还款额[\s\S]*?(\d+\.\d+)/RMB",
+        r"最低还款额[\s\S]*?(\d+\.?\d+)/RMB",
     ]:
         m = re.search(p, text)
         if m:
@@ -158,7 +158,109 @@ def extract_bill_info(text, bank_name, bank_rules):
     if m:
         info["billing_cycle"] = f"{m.group(1)}~{m.group(2)}"
     
+    # 提取账单月份和账单日
+    # 先尝试提取完整日期的账单日（包含年月日）
+    for p in [
+        r"账单日\s*Statement\s*Date\s*(\d{4})/(\d{2})/(\d{2})",
+        r"账单日\s*Statement\s*Date\s*(\d{4})-(\d{2})-(\d{2})",
+        r"账单日\s*Statement\s*Date\s*(\d{4})年(\d{1,2})月(\d{1,2})日",
+        r"账单日期\s*Statement\s*Date\s*(\d{4})年(\d{1,2})月(\d{1,2})日",
+        r"账单日\s+(\d{4})年(\d{1,2})月(\d{1,2})日",
+        r"账单日\s+(\d{4})-(\d{2})-(\d{2})",
+        r"本期账单日\s*(\d{4})-(\d{2})-(\d{2})",
+        r"账单日\s*Statement\s*Closing\s*Date\s*(\d{4})-(\d{2})-(\d{2})",
+        r"Statement\s*Closing\s*Date[\s\S]*?(\d{4})-(\d{2})-(\d{2})[\s\S]*?(\d{4})-(\d{2})-(\d{2})",
+        r"账单日期\s*Statement\s*Date\s+到期还款日[\s\S]*?(\d{4})/(\d{2})/(\d{2})",
+    ]:
+        m = re.search(p, text)
+        if m:
+            # 根据 groups 数量选择正确的 group
+            if len(m.groups()) >= 6:
+                # Statement Closing Date 有两个日期，取第二个（账单日）
+                info["bill_day"] = int(m.group(6))
+                if "billing_month" not in info:
+                    info["billing_month"] = f"{m.group(4)}-{int(m.group(5)):02d}"
+            else:
+                info["bill_day"] = int(m.group(3))
+                if "billing_month" not in info:
+                    info["billing_month"] = f"{m.group(1)}-{int(m.group(2)):02d}"
+            break
+    
+    # 再尝试提取纯数字账单日
+    if "bill_day" not in info:
+        for p in [
+            r"账单日[：:]\s*(\d{1,2})",
+            r"账单日为(\d{1,2})日",
+            r"(\d{1,2})日为您的账单日",
+            r"每月(\d{1,2})日出账",
+            r"账单日(\d{1,2})本期",
+        ]:
+            m = re.search(p, text)
+            if m:
+                info["bill_day"] = int(m.group(1))
+                break
+    
+    # 如果还没提取到账单月，从账单周期推断
+    if "billing_month" not in info and "billing_cycle" in info:
+        try:
+            cycle_end = info["billing_cycle"].split("~")[1]
+            parts = cycle_end.replace("/", "-").split("-")
+            if len(parts) == 3:
+                info["billing_month"] = f"{parts[0]}-{int(parts[1]):02d}"
+                info["bill_day"] = int(parts[2])
+        except:
+            pass
+    
+    for p in [
+        r"(\d{4})年(\d{1,2})月账单",
+        r"(\d{4})年(\d{1,2})月[日].*?账单",
+        r"账单周期\s*(\d{4})[/-](\d{2})[/-](\d{2})",
+    ]:
+        m = re.search(p, text)
+        if m:
+            year = int(m.group(1))
+            month = int(m.group(2))
+            if 2020 <= year <= 2030 and 1 <= month <= 12:
+                info["billing_month"] = f"{year}-{month:02d}"
+                break
+    
+    # 如果没有提取到账单月，从到期还款日推断
+    if "billing_month" not in info and "due_date" in info:
+        try:
+            from datetime import datetime
+            due = datetime.strptime(info["due_date"][:10], "%Y-%m-%d")
+            bill_month = due.month - 1
+            bill_year = due.year
+            if bill_month == 0:
+                bill_month = 12
+                bill_year -= 1
+            info["billing_month"] = f"{bill_year}-{bill_month:02d}"
+        except:
+            pass
+    
     return info
+
+def identify_cardholder(text):
+    """从邮件内容识别持卡人"""
+    if not text:
+        return None
+    
+    # 加载持卡人配置
+    config_path = os.path.expanduser("~/credit-card-bill-monitor/config/cardholders.json")
+    if not os.path.exists(config_path):
+        return None
+    
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+    
+    cardholders = config.get("cardholders", {})
+    
+    # 搜索姓名
+    for name, person in cardholders.items():
+        if name in text:
+            return person
+    
+    return None
 
 def fetch_all_emails():
     """获取所有邮件信封"""
@@ -227,6 +329,9 @@ def sync_emails(verbose=False):
         text_to_parse = attachment_text if attachment_text else body_text
         bill_info = extract_bill_info(text_to_parse, bank, bank_rules)
         
+        # 识别持卡人
+        person = identify_cardholder(text_to_parse or body_text)
+        
         # 存入数据库
         insert_email(
             email_id=email_id,
@@ -234,12 +339,15 @@ def sync_emails(verbose=False):
             sender=sender,
             received_at=received_at,
             bank=bank,
+            person=person,
             body_text=body_text,
             has_attachment=has_attachment,
             attachment_text=attachment_text,
             parsed_amount=bill_info.get("amount"),
             parsed_due_date=bill_info.get("due_date"),
-            parsed_cardholder=None  # 后续匹配
+            parsed_cardholder=person,
+            billing_month=bill_info.get("billing_month"),
+            bill_day=bill_info.get("bill_day")
         )
         
         new_count += 1

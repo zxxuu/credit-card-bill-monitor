@@ -6,18 +6,19 @@ from . import get_db
 
 def insert_email(email_id, subject, sender, received_at, bank=None, person=None,
                  body_text=None, has_attachment=0, attachment_text=None,
-                 parsed_amount=None, parsed_due_date=None, parsed_cardholder=None):
+                 parsed_amount=None, parsed_due_date=None, parsed_cardholder=None,
+                 billing_month=None, bill_day=None):
     """插入或更新邮件"""
     conn = get_db()
     conn.execute("""
         INSERT OR REPLACE INTO emails 
         (id, subject, sender, received_at, bank, person, body_text, 
          has_attachment, attachment_text, parsed_amount, parsed_due_date, 
-         parsed_cardholder, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         parsed_cardholder, billing_month, bill_day, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (email_id, subject, sender, received_at, bank, person, body_text,
           has_attachment, attachment_text, parsed_amount, parsed_due_date,
-          parsed_cardholder, datetime.now().isoformat()))
+          parsed_cardholder, billing_month, bill_day, datetime.now().isoformat()))
     conn.commit()
     conn.close()
 
@@ -72,3 +73,24 @@ def get_email_count():
     count = conn.execute("SELECT COUNT(*) FROM emails").fetchone()[0]
     conn.close()
     return count
+
+def get_email_by_bill_day(bank, person, bill_day, billing_month=None):
+    """按银行+持卡人+账单日匹配邮件"""
+    conn = get_db()
+    if billing_month:
+        # 优先匹配 billing_month
+        row = conn.execute(
+            "SELECT * FROM emails WHERE bank = ? AND person = ? AND bill_day = ? AND billing_month = ? ORDER BY received_at DESC LIMIT 1",
+            (bank, person, bill_day, billing_month)
+        ).fetchone()
+        if row:
+            conn.close()
+            return dict(row)
+    
+    # 降级：只按 bill_day 匹配
+    row = conn.execute(
+        "SELECT * FROM emails WHERE bank = ? AND person = ? AND bill_day = ? ORDER BY received_at DESC LIMIT 1",
+        (bank, person, bill_day)
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None

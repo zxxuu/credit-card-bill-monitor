@@ -33,9 +33,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS bills (
             id INTEGER PRIMARY KEY,
             card_id INTEGER REFERENCES cards(id),
-            billing_cycle TEXT NOT NULL,    -- "2026-06"
-            billing_date TEXT,             -- 本期账单日
-            due_date TEXT,                 -- 还款日
+            billing_cycle TEXT NOT NULL,
+            billing_date TEXT,
+            due_date TEXT,
             amount TEXT,
             min_payment TEXT,
             cardholder TEXT,
@@ -60,6 +60,8 @@ def init_db():
             parsed_amount TEXT,
             parsed_due_date TEXT,
             parsed_cardholder TEXT,
+            billing_month TEXT,
+            bill_day INTEGER,
             created_at TEXT
         );
 

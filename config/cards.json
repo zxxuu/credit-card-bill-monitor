@@ -10,7 +10,7 @@
   {"id": 9,  "person": "我的", "bank": "农行",     "card_name": "农行漂亮妈妈", "bill_day": 13, "due_rule": "+25", "grace_days": 25},
   {"id": 10, "person": "我的", "bank": "张家口",   "card_name": "张家口",     "bill_day": 15, "due_rule": "5",   "grace_days": 21},
   {"id": 11, "person": "我的", "bank": "华夏",     "card_name": "华夏",       "bill_day": 16, "due_rule": "+20", "grace_days": 20},
-  {"id": 12, "person": "我的", "bank": "邮储",     "card_name": "邮储",       "bill_day": 16, "due_rule": "+19", "grace_days": 19},
+  {"id": 12, "person": "我的", "bank": "邮储",     "card_name": "邮储",       "bill_day": 15, "due_rule": "+20", "grace_days": 20},
   {"id": 13, "person": "我的", "bank": "工商",     "card_name": "工商",       "bill_day": 17, "due_rule": "10",  "grace_days": 23},
   {"id": 14, "person": "我的", "bank": "邮储",     "card_name": "邮储无界白", "bill_day": 17, "due_rule": "+20", "grace_days": 20},
   {"id": 15, "person": "我的", "bank": "平安",     "card_name": "平安",       "bill_day": 17, "due_rule": "5",   "grace_days": 18},

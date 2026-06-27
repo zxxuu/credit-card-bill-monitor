@@ -273,7 +273,7 @@ def fetch_all_emails():
         pass
     return []
 
-def sync_emails(verbose=False):
+def sync_emails(verbose=False, force=False):
     """同步邮件"""
     init_db()
     bank_rules = load_bank_rules()
@@ -289,9 +289,13 @@ def sync_emails(verbose=False):
     for email in emails:
         email_id = email.get("id")
         
-        # 跳过已存在的
+        # 跳过已存在的（除非force模式）
         if email_exists(email_id):
-            skip_count += 1
+            if force:
+                reparse_email(email_id, bank_rules, verbose)
+                update_count += 1
+            else:
+                skip_count += 1
             continue
         
         subject = email.get("subject", "")
@@ -356,10 +360,41 @@ def sync_emails(verbose=False):
             print(f"  ✅ 新增: {bank} | {subject[:30]} | 金额: {amount}")
     
     if verbose:
-        print(f"\n同步完成: 新增 {new_count}, 跳过 {skip_count}, 总计 {get_email_count()}")
+        print(f"\n同步完成: 新增 {new_count}, 更新 {update_count}, 跳过 {skip_count}, 总计 {get_email_count()}")
     
     return new_count
 
+def reparse_email(email_id, bank_rules, verbose=False):
+    """重新解析已有邮件的金额"""
+    conn = get_db()
+    row = conn.execute("SELECT bank, body_text, attachment_text FROM emails WHERE id=?", (email_id,)).fetchone()
+    if not row:
+        conn.close()
+        return
+    
+    bank, body_text, attachment_text = row[0], row[1], row[2]
+    if not bank:
+        conn.close()
+        return
+    
+    rules = bank_rules.get(bank, bank_rules.get("default", {}))
+    text_to_parse = attachment_text if rules.get("source") == "attachment" and attachment_text else body_text
+    
+    if not text_to_parse:
+        conn.close()
+        return
+    
+    bill_info = extract_bill_info(text_to_parse, bank, bank_rules)
+    
+    if bill_info.get("amount"):
+        conn.execute("UPDATE emails SET parsed_amount=? WHERE id=?", (bill_info["amount"], email_id))
+        conn.commit()
+        if verbose:
+            print(f"  🔄 更新: {bank} | 金额: {bill_info["amount"]}")
+    
+    conn.close()
+
 if __name__ == "__main__":
     verbose = "--verbose" in sys.argv or "-v" in sys.argv
-    sync_emails(verbose=verbose)
+    force = "--force" in sys.argv or "-f" in sys.argv
+    sync_emails(verbose=verbose, force=force)

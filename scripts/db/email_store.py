@@ -94,3 +94,19 @@ def get_email_by_bill_day(bank, person, bill_day, billing_month=None):
     ).fetchone()
     conn.close()
     return dict(row) if row else None
+
+def get_emails_by_bill_day(bank, person, bill_day, billing_month=None):
+    """按银行+持卡人+账单日获取所有匹配邮件（用于汇总）"""
+    conn = get_db()
+    if billing_month:
+        rows = conn.execute(
+            "SELECT * FROM emails WHERE bank = ? AND person = ? AND bill_day = ? AND billing_month = ? ORDER BY received_at DESC",
+            (bank, person, bill_day, billing_month)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM emails WHERE bank = ? AND person = ? AND bill_day = ? ORDER BY received_at DESC",
+            (bank, person, bill_day)
+        ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]

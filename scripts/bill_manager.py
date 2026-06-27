@@ -8,7 +8,7 @@ from datetime import datetime
 # 添加项目路径
 sys.path.insert(0, os.path.expanduser("~/credit-card-bill-monitor"))
 from scripts.db import init_db, get_db
-from scripts.db.email_store import get_latest_email, get_email_count, get_email_by_bill_day
+from scripts.db.email_store import get_latest_email, get_email_count, get_email_by_bill_day, get_emails_by_bill_day
 from scripts.rules.due_date import calc_billing_date, calc_due_date, get_billing_cycle, days_until_due
 
 CONFIG_DIR = os.path.expanduser("~/credit-card-bill-monitor/config")
@@ -70,7 +70,8 @@ def main(verbose=False):
         days_left = days_until_due(due_date, today)
         
         # 从邮件库查找匹配的邮件（按 bank + person + bill_day 匹配）
-        email = get_email_by_bill_day(bank, person, bill_day, billing_cycle)
+        billing_month = billing_date.strftime("%Y-%m")
+        emails = get_emails_by_bill_day(bank, person, bill_day, billing_month)
         
         # 准备状态数据
         cs = {
@@ -91,14 +92,24 @@ def main(verbose=False):
             "last_update": today.isoformat()
         }
         
-        if email:
-            # 有匹配邮件
-            cs["amount"] = email.get("parsed_amount", "")
-            cs["amount_confirmed"] = bool(cs["amount"])
-            cs["min_payment"] = email.get("parsed_min_payment", "")
-            cs["cardholder"] = email.get("parsed_cardholder", "")
-            cs["email_id"] = email["id"]
-            cs["email_subject"] = email.get("subject", "")
+        if emails:
+            # 有匹配邮件 - 汇总金额
+            total_amount = 0
+            has_amount = False
+            for email in emails:
+                amt = email.get("parsed_amount", "")
+                if amt:
+                    try:
+                        total_amount += float(amt)
+                        has_amount = True
+                    except:
+                        pass
+            cs["amount"] = str(total_amount) if has_amount else ""
+            cs["amount_confirmed"] = has_amount
+            cs["min_payment"] = emails[0].get("parsed_min_payment", "")
+            cs["cardholder"] = emails[0].get("parsed_cardholder", "")
+            cs["email_id"] = emails[0]["id"]
+            cs["email_subject"] = emails[0].get("subject", "")
             
             if verbose:
                 amount_str = f"￥{cs['amount']}" if cs['amount'] else "❓未解析"

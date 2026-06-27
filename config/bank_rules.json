@@ -29,10 +29,9 @@
     "source": "body",
     "amount_patterns": [
       "RMB Statement Balance\\s+[￥¥]\\s*([\\d,]+\\.?\\d*)",
-      "RMB Statement Balance\\s+RMB Minimum Payment Due\\s+[\\d/]+\\s+[\\d/]+\\s+[￥¥]([\\d,]+\\.?\\d*)\\s+[￥¥]([\\d,]+\\.?\\d*)",
-      "人民币本期应还款额[\\s\\S]*?RMB Statement Balance\\s+[￥¥]\\s*([\\d,]+\\.?\\d*)"
-    ],
-    "amount_group": 2
+      "人民币本期应还款额[\\s\\S]*?RMB Statement Balance\\s+[￥¥]\\s*([\\d,]+\\.?\\d*)",
+      "本期欠款 Closing Balance[：:]\\s*([\\d,]+\\.?\\d*)"
+    ]
   },
   "交通": {
     "keywords": [

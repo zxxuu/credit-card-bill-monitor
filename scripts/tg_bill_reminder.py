@@ -137,7 +137,9 @@ def build_kb(expanded=False, listening=False):
             row = []
             for c in unprocessed:
                 p, b = c.get("person",""), c.get("bank","")
-                days = c.get('days_until_due', 0)
+                try:
+                    days = (datetime.strptime(c.get('pay_date','2099-01-01'), '%Y-%m-%d').date() - datetime.now().date()).days
+                except: days = 0
                 days_str = f"{days}天" if days >= 0 else "已过期"
                 btn_text = f"✅{p}-{c.get('card_name','') or b} {days_str}"
                 row.append({"text": btn_text, "callback_data": f"pay|{p}|{b}|{c.get('bill_day','')}"})

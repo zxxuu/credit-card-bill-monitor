@@ -47,7 +47,17 @@ def main(verbose=False):
     init_db()
     cards_config = load_cards()
     cardholders = load_cardholders()
-    state = load_state()
+    old_state = load_state()
+    
+    # 重建状态，只保留已处理标记
+    processed = {}
+    for c in old_state.get("cards", []):
+        if c.get("status") == "已处理":
+            processed[c.get("card_id")] = {
+                "status": "已处理",
+                "processed_at": c.get("processed_at")
+            }
+    state = {"cards": [], "last_update": None}
     
     today = datetime.now()
     print(f"\n📅 今天: {today.strftime('%Y-%m-%d')}")
@@ -121,18 +131,11 @@ def main(verbose=False):
             if verbose:
                 print(f"  ⚠️ {person:4}|{bank:10}|{'❓待解析':>12}|{due_date.strftime('%Y-%m-%d')}|")
         
-        # 更新状态（用 card_id 作唯一键，避免重复）
-        existing = next((c for c in state["cards"] 
-                        if c.get("card_id") == card_id), None)
-        
-        if existing:
-            # 保留已处理状态
-            if existing.get("status") == "已处理":
-                cs["status"] = "已处理"
-                cs["processed_at"] = existing.get("processed_at")
-            existing.update(cs)
-        else:
-            state["cards"].append(cs)
+        # 恢复已处理状态
+        if card_id in processed:
+            cs["status"] = processed[card_id]["status"]
+            cs["processed_at"] = processed[card_id]["processed_at"]
+        state["cards"].append(cs)
     
     # 保存状态
     state["last_update"] = today.isoformat()

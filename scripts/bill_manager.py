@@ -49,11 +49,12 @@ def main(verbose=False):
     cardholders = load_cardholders()
     old_state = load_state()
     
-    # 重建状态，只保留已处理标记
+    # 重建状态，只保留已处理标记（按 card_id + billing_cycle 绑定）
     processed = {}
     for c in old_state.get("cards", []):
         if c.get("status") == "已处理":
-            processed[c.get("card_id")] = {
+            key = f"{c.get('card_id')}_{c.get('billing_cycle')}"
+            processed[key] = {
                 "status": "已处理",
                 "processed_at": c.get("processed_at")
             }
@@ -131,10 +132,11 @@ def main(verbose=False):
             if verbose:
                 print(f"  ⚠️ {person:4}|{bank:10}|{'❓待解析':>12}|{due_date.strftime('%Y-%m-%d')}|")
         
-        # 恢复已处理状态
-        if card_id in processed:
-            cs["status"] = processed[card_id]["status"]
-            cs["processed_at"] = processed[card_id]["processed_at"]
+        # 恢复已处理状态（仅限当前账单周期）
+        proc_key = f"{card_id}_{billing_cycle}"
+        if proc_key in processed:
+            cs["status"] = processed[proc_key]["status"]
+            cs["processed_at"] = processed[proc_key]["processed_at"]
         state["cards"].append(cs)
     
     # 保存状态

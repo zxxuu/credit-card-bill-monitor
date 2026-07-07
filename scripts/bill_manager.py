@@ -58,6 +58,11 @@ def main(verbose=False):
                 "status": "已处理",
                 "processed_at": c.get("processed_at")
             }
+            # 向后兼容：也保存 card_id only 的key
+            processed[str(c.get("card_id"))] = {
+                "status": "已处理",
+                "processed_at": c.get("processed_at")
+            }
     state = {"cards": [], "last_update": None}
     
     today = datetime.now()
@@ -137,6 +142,11 @@ def main(verbose=False):
         if proc_key in processed:
             cs["status"] = processed[proc_key]["status"]
             cs["processed_at"] = processed[proc_key]["processed_at"]
+        else:
+            # 向后兼容：只按 card_id 匹配（不含 billing_cycle）
+            if card_id in processed:
+                cs["status"] = processed[card_id]["status"]
+                cs["processed_at"] = processed[card_id]["processed_at"]
         state["cards"].append(cs)
     
     # 保存状态

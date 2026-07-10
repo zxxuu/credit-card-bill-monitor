@@ -5,9 +5,7 @@
     "source": "body",
     "amount_patterns": [
       "本期应还款总额.*?[¥￥]\\s*([\\d,]+\\.?\\d*)",
-      "本期应还金额\\s*[¥￥]\\s*([\\d,]+\\.?\\d*)",
-      "应还款额[\\s\\S]*?(\\d+\\.\\d+)/RMB",
-      "New Balance\\s*(?:CNY|RMB)\\s*([\\d,]+\\.?\\d*)"
+      "应还金额\\s*[¥￥]\\s*([\\d,]+\\.?\\d*)"
     ]
   },
   "中行": {
@@ -47,19 +45,13 @@
     "keywords": [
       "工商"
     ],
-    "source": "body"
-  },
-  "浦发": {
-    "keywords": [
-      "浦发"
+    "source": "body",
+    "amount_patterns": [
+      "人民币\\(本位币\\)[-]+\\s*(-?\\d+\\.\\d+)/RMB",
+      "应还款额\\s*(-?\\d+\\.\\d+)/RMB",
+      "合计\\s*(-?\\d+\\.\\d+)/RMB"
     ],
-    "source": "body"
-  },
-  "招商": {
-    "keywords": [
-      "招商"
-    ],
-    "source": "body"
+    "amount_group": 1
   },
   "中信": {
     "keywords": [
@@ -81,42 +73,6 @@
       "New Balance\\s+人民币\\(CNY\\)\\s+(-?[\\d,]+\\.?\\d*)",
       "本期应还款额[\\s\\S]*?New Balance\\s+人民币\\(CNY\\)\\s+(-?[\\d,]+\\.?\\d*)"
     ]
-  },
-  "民生": {
-    "keywords": [
-      "民生"
-    ],
-    "source": "body"
-  },
-  "华夏": {
-    "keywords": [
-      "华夏"
-    ],
-    "source": "body"
-  },
-  "邮储": {
-    "keywords": [
-      "邮储"
-    ],
-    "source": "body"
-  },
-  "平安": {
-    "keywords": [
-      "平安"
-    ],
-    "source": "body"
-  },
-  "兴业": {
-    "keywords": [
-      "兴业"
-    ],
-    "source": "body"
-  },
-  "广发": {
-    "keywords": [
-      "广发"
-    ],
-    "source": "body"
   },
   "张家口": {
     "keywords": [

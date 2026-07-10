@@ -214,14 +214,5 @@
     "bill_day": 27,
     "due_rule": "+25",
     "grace_days": 25
-  },
-  {
-    "id": 25,
-    "person": "我的",
-    "bank": "工商",
-    "card_name": "工商",
-    "bill_day": 16,
-    "due_rule": "+24",
-    "grace_days": 17
   }
 ]

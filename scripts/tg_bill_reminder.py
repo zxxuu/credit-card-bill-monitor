@@ -279,7 +279,14 @@ def poll(msg_id):
                 elif data.startswith("pay|"):
                     parts = data.split("|")
                     card_id = parts[1]
-                    p, b = parts[2], parts[3]
+                    # 从state里查person/bank用于显示
+                    state = load_state()
+                    p, b = "?", "?"
+                    for c in state.get("cards", []):
+                        if str(c.get("card_id")) == str(card_id):
+                            p = c.get("person", "?")
+                            b = c.get("card_name", c.get("bank", "?"))
+                            break
                     if mark_processed(card_id): tg_api("answerCallbackQuery", {"callback_query_id": cid, "text": f"✅{p}-{b}已标记"}); update_msg(msg_id, expanded, listening=True)
                     else: tg_api("answerCallbackQuery", {"callback_query_id": cid, "text": "❌未找到"})
                 elif data == "refresh":

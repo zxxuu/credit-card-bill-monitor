@@ -21,7 +21,7 @@ def calc_billing_date(bill_day, today=None):
         last_day = calendar.monthrange(today.year, today.month)[1]
         this_month = today.replace(day=min(bill_day, last_day))
     
-    if today >= this_month:
+    if today > this_month:
         return this_month
     else:
         # 上月账单日

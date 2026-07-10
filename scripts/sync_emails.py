@@ -115,6 +115,11 @@ def extract_bill_info(text, bank_name, bank_rules):
     if not text:
         return {}
     
+    # 剥除 HTML 标签
+    import re
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    
     rules = bank_rules.get(bank_name, bank_rules.get("default", {}))
     patterns = rules.get("amount_patterns", bank_rules["default"]["amount_patterns"])
     group_idx = rules.get("amount_group", 1)
@@ -122,15 +127,31 @@ def extract_bill_info(text, bank_name, bank_rules):
     info = {}
     
     # 提取金额
-    for p in patterns:
-        m = re.search(p, text)
+    # 工商银行专用解析：从"应还款额"后面找 人民币(本位币)数字/RMB
+    if bank_name == '工商':
+        # 先找应还款额字段
+        m = re.search(r"应还款额[\s\S]{0,500}?人民币\(本位币\)\s*(-?\d+\.\d+)/RMB", text)
+        if not m:
+            # 备选：直接找 数字/RMB（第一个）
+            m = re.search(r"(-?\d+\.\d+)/RMB", text)
         if m:
             try:
-                amount = m.group(group_idx).replace(",", "")
+                amount = m.group(1).replace(",", "")
                 info["amount"] = str(abs(float(amount)))
-                break
             except:
-                continue
+                pass
+    
+    # 通用金额解析
+    if not info.get("amount"):
+        for p in patterns:
+            m = re.search(p, text)
+            if m:
+                try:
+                    amount = m.group(group_idx).replace(",", "")
+                    info["amount"] = str(abs(float(amount)))
+                    break
+                except:
+                    continue
     
     # 提取还款日
     for p in [
@@ -161,6 +182,7 @@ def extract_bill_info(text, bank_name, bank_rules):
     # 提取账单月份和账单日
     # 先尝试提取完整日期的账单日（包含年月日）
     for p in [
+            r"账单周期[\s\S]*?(\d{4})年(\d{1,2})月(\d{1,2})日[\s\S]*?(\d{4})年(\d{1,2})月(\d{1,2})日",
         r"账单日\s*Statement\s*Date\s*(\d{4})/(\d{2})/(\d{2})",
         r"账单日\s*Statement\s*Date\s*(\d{4})-(\d{2})-(\d{2})",
         r"账单日\s*Statement\s*Date\s*(\d{4})年(\d{1,2})月(\d{1,2})日",
@@ -186,7 +208,7 @@ def extract_bill_info(text, bank_name, bank_rules):
                     info["billing_month"] = f"{m.group(1)}-{int(m.group(2)):02d}"
             break
     
-    # 再尝试提取纯数字账单日
+    # 再尝试提取纯数字账单日（支持中文格式）
     if "bill_day" not in info:
         for p in [
             r"账单日[：:]\s*(\d{1,2})",

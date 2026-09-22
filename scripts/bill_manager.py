@@ -4,6 +4,7 @@ import json
 import os
 import sys
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 
 # 添加项目路径
 sys.path.insert(0, os.path.expanduser("~/credit-card-bill-monitor"))
@@ -13,6 +14,19 @@ from scripts.rules.due_date import calc_billing_date, calc_due_date, get_billing
 
 CONFIG_DIR = os.path.expanduser("~/credit-card-bill-monitor/config")
 STATE_FILE = os.path.expanduser("~/credit-card-bill-monitor/state.json")
+
+CENT = Decimal("0.01")
+
+
+def fmt_amount(v):
+    """金额统一成两位小数字符串。
+
+    为什么必须做这一步：多封账单邮件用 float 累加会出现二进制浮点尾巴，
+    例如 424.28 + 70.82 会得到 495.09999999999997，直接 str() 写进 state.json
+    后 Telegram 里就显示成「￥495.09999999999997」。
+    金额一律走 Decimal + ROUND_HALF_UP，既不丢精度也不会出现长尾。
+    """
+    return str(Decimal(str(v)).quantize(CENT, rounding=ROUND_HALF_UP))
 
 def load_cards():
     """加载卡片配置"""
@@ -49,17 +63,14 @@ def main(verbose=False):
     cardholders = load_cardholders()
     old_state = load_state()
     
-    # 重建状态，只保留已处理标记（按 card_id + billing_cycle 绑定）
+    # 重建状态，只保留已处理标记（严格按 card_id + billing_cycle 绑定）
+    # 注意：不再写裸 card_id 兜底 key —— 否则上月"已处理"会污染本月新账单，导致漏还款。
+    # 同时跳过 card_id 为空的脏卡（历史 v3 产物），它们的 key 是 "None_xxx"，永远匹配不上。
     processed = {}
     for c in old_state.get("cards", []):
-        if c.get("status") == "已处理":
+        if c.get("status") == "已处理" and c.get("card_id") not in (None, ""):
             key = f"{c.get('card_id')}_{c.get('billing_cycle')}"
             processed[key] = {
-                "status": "已处理",
-                "processed_at": c.get("processed_at")
-            }
-            # 向后兼容：也保存 card_id only 的key
-            processed[str(c.get("card_id"))] = {
                 "status": "已处理",
                 "processed_at": c.get("processed_at")
             }
@@ -109,18 +120,18 @@ def main(verbose=False):
         }
         
         if emails:
-            # 有匹配邮件 - 汇总金额
-            total_amount = 0
+            # 有匹配邮件 - 汇总金额（用 Decimal 累加，避免浮点尾巴）
+            total_amount = Decimal("0")
             has_amount = False
             for email in emails:
                 amt = email.get("parsed_amount", "")
                 if amt:
                     try:
-                        total_amount += float(amt)
+                        total_amount += Decimal(str(amt))
                         has_amount = True
-                    except:
+                    except Exception:
                         pass
-            cs["amount"] = str(total_amount) if has_amount else ""
+            cs["amount"] = fmt_amount(total_amount) if has_amount else ""
             cs["amount_confirmed"] = has_amount
             cs["min_payment"] = emails[0].get("parsed_min_payment", "")
             cs["cardholder"] = emails[0].get("parsed_cardholder", "")
@@ -137,16 +148,11 @@ def main(verbose=False):
             if verbose:
                 print(f"  ⚠️ {person:4}|{bank:10}|{'❓待解析':>12}|{due_date.strftime('%Y-%m-%d')}|")
         
-        # 恢复已处理状态（仅限当前账单周期）
+        # 恢复已处理状态（严格限定当前账单周期，跨周期不继承，防止漏还款）
         proc_key = f"{card_id}_{billing_cycle}"
         if proc_key in processed:
             cs["status"] = processed[proc_key]["status"]
             cs["processed_at"] = processed[proc_key]["processed_at"]
-        else:
-            # 向后兼容：只按 card_id 匹配（不含 billing_cycle）
-            if card_id in processed:
-                cs["status"] = processed[card_id]["status"]
-                cs["processed_at"] = processed[card_id]["processed_at"]
         state["cards"].append(cs)
     
     # 保存状态
@@ -161,10 +167,10 @@ def main(verbose=False):
     for c in state["cards"]:
         bp.setdefault(c.get("person", ""), []).append(c)
     
-    total = 0
+    total = Decimal("0")
     for person, cl in bp.items():
         print(f"👤 {person}:")
-        t = 0
+        t = Decimal("0")
         for c in cl:
             a = c.get("amount", "") or "0"
             ok = c.get("amount_confirmed", False)
@@ -182,7 +188,7 @@ def main(verbose=False):
             si = "✅" if st == "已处理" else "⏳"
             
             if ok:
-                astr = f"{a}" if float(a) > 0 else "0(确认)"
+                astr = fmt_amount(a) if float(a) > 0 else "0(确认)"
             else:
                 astr = "❓待解析"
             
@@ -190,14 +196,14 @@ def main(verbose=False):
             
             if ok:
                 try:
-                    t += float(a)
-                except:
+                    t += Decimal(str(a))
+                except Exception:
                     pass
         
-        print(f"  💰 小计: ￥{t:.2f}")
+        print(f"  💰 小计: ￥{t.quantize(CENT, rounding=ROUND_HALF_UP)}")
         total += t
     
-    print(f"\n💰 总计: ￥{total:.2f}")
+    print(f"\n💰 总计: ￥{total.quantize(CENT, rounding=ROUND_HALF_UP)}")
 
 if __name__ == "__main__":
     verbose = "--verbose" in sys.argv or "-v" in sys.argv

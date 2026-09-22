@@ -64,8 +64,14 @@ def add_msg_id(mid):
     if mid not in ids: ids.append(mid); save_msg_ids(ids)
 
 def mark_processed(card_id):
+    # 防御：card_id 为空/None（历史 v3 幽灵卡）一律拒绝，
+    # 否则 str(None)=="None" 会误命中第一张无 card_id 的卡 —— 这就是"点A标记成B"的根源。
+    if card_id is None or str(card_id).strip() in ("", "None"):
+        return False
     state = load_state()
     for c in state["cards"]:
+        if c.get("card_id") in (None, ""):   # 跳过无 card_id 的脏卡
+            continue
         if str(c.get("card_id")) == str(card_id):
             c["status"] = "已处理"; c["processed_at"] = datetime.now().isoformat()
             save_state(state); return True
@@ -74,18 +80,31 @@ def mark_processed(card_id):
 def mark_all():
     state = load_state(); count = 0
     for c in state["cards"]:
+        if c.get("card_id") in (None, ""):   # 跳过无 card_id 的脏卡
+            continue
         if c.get("status") != "已处理":
             c["status"] = "已处理"; c["processed_at"] = datetime.now().isoformat(); count += 1
     save_state(state); return count
 
 def refresh_bills_async(msg_id, expanded, listening):
-    """异步刷新账单数据"""
+    """异步刷新账单数据
+
+    注意：必须走 v4 的 bill_manager.py（读 SQLite，产出带 card_id 的 state）。
+    早期这里调的是 v3 bill_manager_final.py（读 credit_cards.xlsx），它的
+    bill_day 是字符串、与 v4 写入的整数 bill_day 不相等，合并键失效后会
+    append 出 25 张无 card_id 的幽灵卡 —— 那正是"标记丢失 + 按钮错乱"的根源。
+    """
     import threading
-    
+
     def do_refresh():
-        script = os.path.expanduser("~/credit-card-bill-monitor/scripts/bill_manager_final.py")
+        base = os.path.expanduser("~/credit-card-bill-monitor")
+        script = os.path.join(base, "scripts", "bill_manager.py")
+        py = os.path.join(base, "venv", "bin", "python")
+        if not os.path.exists(py):
+            py = "python3"
         try:
-            r = subprocess.run(["python3", script], capture_output=True, text=True, timeout=180)
+            r = subprocess.run([py, script], capture_output=True, text=True,
+                               timeout=180, cwd=base)
             if r.returncode == 0:
                 # 刷新成功，更新消息
                 update_msg(msg_id, expanded, listening)
@@ -93,16 +112,19 @@ def refresh_bills_async(msg_id, expanded, listening):
                 tg_api("sendMessage", {"chat_id": CHAT_ID, "text": "✅ 刷新完成！账单数据已更新"})
             else:
                 # 刷新失败，发送错误提示
-                tg_api("sendMessage", {"chat_id": CHAT_ID, "text": f"❌刷新失败: {r.stderr[:200]}"})
+                tg_api("sendMessage", {"chat_id": CHAT_ID, "text": f"❌刷新失败: {(r.stderr or r.stdout)[:200]}"})
         except Exception as e:
             tg_api("sendMessage", {"chat_id": CHAT_ID, "text": f"❌刷新异常: {str(e)[:200]}"})
-    
+
     t = threading.Thread(target=do_refresh, daemon=True)
     t.start()
 
 def get_unprocessed():
     state = load_state(); today = datetime.now().strftime("%Y-%m-%d")
-    unprocessed = [c for c in state["cards"] if c.get("status") != "已处理"]
+    # 过滤掉无 card_id 的脏卡（历史 v3 幽灵卡）：它们既点不动（pay|None），
+    # 又会用陈旧 pay_date 刷屏，让"未处理账单"看起来一整屏。
+    unprocessed = [c for c in state["cards"]
+                   if c.get("card_id") not in (None, "") and c.get("status") != "已处理"]
     def uk(c):
         try: return (datetime.strptime(c["pay_date"], "%Y-%m-%d") - datetime.strptime(today, "%Y-%m-%d")).days
         except: return 999
@@ -119,7 +141,14 @@ def build_text():
             dl = (datetime.strptime(pd, "%Y-%m-%d") - datetime.strptime(today, "%Y-%m-%d")).days
             urg = "❌已过期" if dl < 0 else f"⚠️{dl}天" if dl <= 3 else f"✅{dl}天"
         except: urg = "❓"
-        amt_s = f"￥{amt}" if ok and float(amt) > 0 else "￥0" if ok else "❓"
+        # 金额一律两位小数显示 —— 老 state.json 里可能残留 495.09999999999997 这类浮点尾巴
+        if ok:
+            try:
+                amt_s = f"￥{float(amt):.2f}" if float(amt) > 0 else "￥0"
+            except Exception:
+                amt_s = "￥0"
+        else:
+            amt_s = "❓"
         card_display = c.get('card_name', '') or b
         lines.append(f"{i+1}. {p}-{card_display} {amt_s} {urg}")
         if ok:

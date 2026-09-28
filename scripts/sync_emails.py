@@ -271,7 +271,7 @@ DUE_PATTERNS_COMMON = [
 MIN_PAYMENT_PATTERNS = [
     r"本期最低还款额[\s\S]{0,80}?[¥￥]\s*([\d,]+\.?\d*)",
     r"本期最低应还金额[\s\S]{0,60}?[¥￥]\s*([\d,]+\.?\d*)",
-    r"最低还款额[\s\S]{0,60}?(\d+\.?\d+)/RMB",
+    r"最低还款额[\s\S]{0,60}?([\d,]+\.?\d+)/RMB",
 ]
 
 # 裸日期区间（无「账单周期」标签），招商新版账单就长这样
@@ -287,14 +287,18 @@ def _parse_icbc_amount(text):
       B（有溢缴款）  ：合计 <上期余额>/RMB<本期收入>/RMB<本期支出>/RMB<本期余额>/RMB
       —— 第 4 个值才是本期应还款（负数表示溢缴，取绝对值）。
     只认「合计」行，不要用「上期余额」，否则有溢缴款时金额会算错。
+
+    ⚠️ 金额可能带千分符（`1,234.56/RMB`），所以数字类统一写 `-?[\\d,]+\\.\\d+`
+    并在 float() 前 `.replace(",", "")`。写成 `-?\\d+\\.\\d+` 会把 `1,234.56`
+    从 `2` 开始咬，得到 `234.56` —— 静默少一位数，不报错。
     """
-    m = re.search(r"合计人民币\(本位币\)\s*(-?\d+\.\d+)/RMB", text)
+    m = re.search(r"合计人民币\(本位币\)\s*(-?[\d,]+\.\d+)/RMB", text)
     if m:
-        return str(abs(float(m.group(1))))
-    m = re.search(r"合计\s*(-?\d+\.\d+)/RMB\s*(-?\d+\.\d+)/RMB"
-                  r"\s*(-?\d+\.\d+)/RMB\s*(-?\d+\.\d+)/RMB", text)
+        return str(abs(float(m.group(1).replace(",", ""))))
+    m = re.search(r"合计\s*(-?[\d,]+\.\d+)/RMB\s*(-?[\d,]+\.\d+)/RMB"
+                  r"\s*(-?[\d,]+\.\d+)/RMB\s*(-?[\d,]+\.\d+)/RMB", text)
     if m:
-        return str(abs(float(m.group(4))))
+        return str(abs(float(m.group(4).replace(",", ""))))
     return None
 
 

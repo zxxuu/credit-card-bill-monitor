@@ -77,7 +77,29 @@ NOISE_IDS = ["21201", "21302", "21374", "21392", "21393", "21436", "21448",
              "21206", "21218", "21263", "21294"]
 
 # 中行靠 PDF，正文里没有数字，需另行验证
-BOC_PDF_EXPECT = {"21510": {"amount": 406.62, "due": "2026-09-28"}}
+# ⚠️「due」是可选字段：只校验写了的那几个。
+# 21511 是「千分符」回归锁：原文是 ...2026-09-08.1,700.09，
+# 捕获组若写成 (\d+\.\d+) 会把 '1,' 交给惰性通配符吃掉、得到 700.09（静默少一位数）。
+BOC_PDF_EXPECT = {
+    "21510": {"amount": 406.62,  "due": "2026-09-28"},
+    "21511": {"amount": 1700.09, "due": "2026-09-28"},
+    "21219": {"amount": 548.33,  "due": "2026-06-28"},
+    "21220": {"amount": 383.98,  "due": "2026-06-28"},
+}
+
+# 千分符合成用例：(说明, 银行, 正文, 期望金额)
+# 中文一律用 \uXXXX 转义写，避免文件在传输/编码环节被改成问号。
+THOUSAND_SEP_CASES = [
+    ("\u4e2d\u884c-\u5343\u5206\u7b26", "\u4e2d\u884c", "\u672c\u671f\u4eba\u6c11\u5e01\u6b20\u6b3e\u603b\u8ba1 2026-09-28 2026-09-08 1,700.09", 1700.09),
+    ("\u4e2d\u884c-\u65e0\u5343\u5206\u7b26", "\u4e2d\u884c", "\u672c\u671f\u4eba\u6c11\u5e01\u6b20\u6b3e\u603b\u8ba1 2026-09-28 2026-09-08 700.09", 700.09),
+    ("\u4e2d\u884c-\u767e\u4e07", "\u4e2d\u884c", "\u672c\u671f\u4eba\u6c11\u5e01\u6b20\u6b3e\u603b\u8ba1 x 1,234,567.89", 1234567.89),
+    ("\u5de5\u5546-\u672c\u4f4d\u5e01", "\u5de5\u5546", "\u5408\u8ba1\u4eba\u6c11\u5e01(\u672c\u4f4d\u5e01) 1,234.56/RMB 123.45/RMB", 1234.56),
+    ("\u4ea4\u901a-\u5343\u5206\u7b26", "\u4ea4\u901a", "\u672c\u671f\u5e94\u8fd8\u6b3e \uffe51,234.56", 1234.56),
+    ("\u62db\u5546-\u6309\u4f4d\u7f6e", "\u62db\u5546", "2026/08/10-2026/09/09 \uffe5 48,000.00\uffe5 5.92\uffe5 0.30 2026/09/27", 5.92),
+    # 民生无￥符号：标签后跟 'RMB 12.00'，照抄华夏 [￥¥] 模板会全部失配
+    ("\u6c11\u751f-RMB\u5f0f", "\u6c11\u751f", "\u8d26\u6237\u540d\u79f0Account\u672c\u671f\u5e94\u8fd8\u6b3e\u91d1\u989dNew Balance\u672c\u671f\u6700\u4f4e\u8fd8\u6b3e\u91d1\u989dMin.Payment\u4eba\u6c11\u5e01/\u7f8e\u5143\u8d26\u6237RMB/USD AccountRMB 12.00        RMB 12.00", 12.00),
+    ("\u6c11\u751f-RMB\u5343\u5206\u7b26", "\u6c11\u751f", "\u672c\u671f\u5e94\u8fd8\u6b3e\u91d1\u989dNew BalanceRMB 1,234.56\u672c\u671f\u6700\u4f4e\u8fd8\u6b3e\u91d1\u989dMin.PaymentRMB 1,234.56", 1234.56),
+]
 
 # 合成用例：(主题, 发件人名, 发件地址, 期望是账单?, 期望匹配到的银行)
 # 中文一律用 \\uXXXX 转义写，避免文件在传输/编码环节被改成问号。
@@ -224,15 +246,29 @@ def main():
             print("  %-8s 附件尚未解析（下次 sync 后校验）" % eid)
             continue
         info = extract_bill_info(r["attachment_text"], "中行", rules)
-        good = (abs(float(info.get("amount") or 0) - exp["amount"]) < 0.005
-                and info.get("due_date") == exp["due"])
+        good = abs(float(info.get("amount") or 0) - exp["amount"]) < 0.005
+        if "due" in exp:                      # due 可选，只校验写了的
+            good = good and info.get("due_date") == exp["due"]
         if good:
             ok += 1
             print("  %-8s amount=%s due=%s ok" % (eid, info.get("amount"), info.get("due_date")))
         else:
             fail += 1
             print("  %-8s amount=%s(%s) due=%s(%s) FAIL" % (
-                eid, info.get("amount"), exp["amount"], info.get("due_date"), exp["due"]))
+                eid, info.get("amount"), exp["amount"],
+                info.get("due_date"), exp.get("due", "(未校验)")))
+
+    print("\n" + "=" * 78)
+    print("M. 千分符金额（合成；防 '1,700.09' 被惰性通配符吃成 '700.09'）")
+    for note, bank, text, want in THOUSAND_SEP_CASES:
+        info = extract_bill_info(text, bank, rules)
+        got = info.get("amount")
+        if got is not None and abs(float(got) - want) < 0.005:
+            ok += 1
+            print("  ok    %-18s %s" % (note, got))
+        else:
+            fail += 1
+            print("  FAIL  %-18s got=%s want=%s  text=%r" % (note, got, want, text))
 
     print("\n" + "=" * 78)
     print("S. 合成用例（不依赖库内数据）")
